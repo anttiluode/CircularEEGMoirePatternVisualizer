@@ -77,6 +77,7 @@ As this is a self-contained project, no build step is required.
 Clone the repository:
 
 git clone https://github.com/anttiluode/CircularEEGMoirePatternVisualizer.git
+
 Use code with caution.
-Sh
+
 Open the index.html (or the main HTML file) in your web browser.
