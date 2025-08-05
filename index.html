@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Moiré Explorer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #00ff88;
+            font-family: 'Orbitron', monospace;
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #control-panel {
+            width: 300px;
+            background: rgba(0, 20, 40, 0.9);
+            border-right: 2px solid #00ff88;
+            padding: 20px;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .section h3 {
+            color: #ff6b9d;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .freq-control {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .freq-label {
+            font-size: 11px;
+            color: #00ff88;
+            width: 60px;
+        }
+        
+        .freq-slider {
+            width: 120px;
+            height: 4px;
+            background: #333;
+            outline: none;
+            border-radius: 2px;
+            -webkit-appearance: none;
+        }
+        
+        .freq-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #00ff88;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #00ff88;
+        }
+        
+        .freq-value {
+            font-size: 10px;
+            color: #00ffff;
+            width: 40px;
+            text-align: right;
+        }
+        
+        #eeg-upload {
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px dashed #00ff88;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        #eeg-upload:hover {
+            background: rgba(0, 255, 136, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        #file-input {
+            display: none;
+        }
+        
+        .control-btn {
+            background: linear-gradient(45deg, #ff6b9d, #c44569);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+            margin: 5px 2px;
+            transition: all 0.3s;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 107, 157, 0.4);
+        }
+        
+        #viewport {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #three-canvas {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        
+        #three-canvas:active {
+            cursor: grabbing;
+        }
+        
+        #status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 10px;
+            border: 1px solid #00ff88;
+        }
+        
+        #neural-state {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #ff6b9d;
+            max-width: 300px;
+        }
+        
+        .glow {
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { text-shadow: 0 0 5px currentColor; }
+            to { text-shadow: 0 0 20px currentColor, 0 0 30px currentColor; }
+        }
+        
+        #zoom-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .zoom-btn {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        
+        .zoom-btn:hover {
+            background: rgba(0, 255, 136, 0.4);
+            transform: scale(1.1);
+        }
+        
+        .loading {
+            animation: pulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="control-panel">
+            <h1 class="glow">Neural Moiré Explorer</h1>
+            
+            <div class="section">
+                <h3>EEG Data Source</h3>
+                <div id="eeg-upload" onclick="document.getElementById('file-input').click()">
+                    <div>📁 Load EEG File</div>
+                    <div style="font-size: 9px; margin-top: 5px; color: #888;">Supports EDF, CSV formats</div>
+                </div>
+                <input type="file" id="file-input" accept=".edf,.csv" />
+                <div style="margin-top: 10px;">
+                    <button class="control-btn" onclick="generateSynthetic()">🧠 Synthetic Brain</button>
+                    <button class="control-btn" onclick="loadDemo()">🎯 Load Demo</button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Frequency Oscillators</h3>
+                <div class="freq-control">
+                    <span class="freq-label">Delta</span>
+                    <input type="range" class="freq-slider" id="delta" min="0" max="1" step="0.01" value="0.3" oninput="updateField()">
+                    <span class="freq-value" id="delta-val">0.30</span>
+                </div>
+                <div class="freq-control">
+                    <span class="freq-label">Theta</span>
+                    <input type="range" class="freq-slider" id="theta" min="0" max="1" step="0.01" value="0.5" oninput="updateField()">
+                    <span class="freq-value" id="theta-val">0.50</span>
+                </div>
+                <div class="freq-control">
+                    <span class="freq-label">Alpha</span>
+                    <input type="range" class="freq-slider" id="alpha" min="0" max="1" step="0.01" value="0.8" oninput="updateField()">
+                    <span class="freq-value" id="alpha-val">0.80</span>
+                </div>
+                <div class="freq-control">
+                    <span class="freq-label">Beta</span>
+                    <input type="range" class="freq-slider" id="beta" min="0" max="1" step="0.01" value="0.4" oninput="updateField()">
+                    <span class="freq-value" id="beta-val">0.40</span>
+                </div>
+                <div class="freq-control">
+                    <span class="freq-label">Gamma</span>
+                    <input type="range" class="freq-slider" id="gamma" min="0" max="1" step="0.01" value="0.2" oninput="updateField()">
+                    <span class="freq-value" id="gamma-val">0.20</span>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Field Parameters</h3>
+                <div class="freq-control">
+                    <span class="freq-label">Moiré</span>
+                    <input type="range" class="freq-slider" id="moire" min="0.1" max="2.0" step="0.1" value="1.0" oninput="updateField()">
+                    <span class="freq-value" id="moire-val">1.0</span>
+                </div>
+                <div class="freq-control">
+                    <span class="freq-label">Chaos</span>
+                    <input type="range" class="freq-slider" id="chaos" min="0" max="1" step="0.01" value="0.3" oninput="updateField()">
+                    <span class="freq-value" id="chaos-val">0.30</span>
+                </div>
+                <div class="freq-control">
+                    <span class="freq-label">Coupling</span>
+                    <input type="range" class="freq-slider" id="coupling" min="0" max="1" step="0.01" value="0.6" oninput="updateField()">
+                    <span class="freq-value" id="coupling-val">0.60</span>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>Exploration Mode</h3>
+                <button class="control-btn" onclick="toggleMode('field')" id="mode-field">🌊 Field View</button>
+                <button class="control-btn" onclick="toggleMode('channels')" id="mode-channels">📡 Channel Grid</button>
+                <button class="control-btn" onclick="toggleMode('interference')" id="mode-interference">⚡ Interference</button>
+                <button class="control-btn" onclick="resetView()">🎯 Reset View</button>
+            </div>
+            
+            <div class="section">
+                <h3>Time Control</h3>
+                <button class="control-btn" onclick="togglePlayback()" id="play-btn">▶️ Play</button>
+                <button class="control-btn" onclick="stepTime()">⏭️ Step</button>
+                <div class="freq-control" style="margin-top: 10px;">
+                    <span class="freq-label">Speed</span>
+                    <input type="range" class="freq-slider" id="speed" min="0.1" max="3.0" step="0.1" value="1.0">
+                    <span class="freq-value" id="speed-val">1.0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="viewport">
+            <canvas id="three-canvas"></canvas>
+            
+            <div id="neural-state">
+                <div style="color: #ff6b9d; font-weight: bold; margin-bottom: 8px;">Neural State Analysis</div>
+                <div id="state-description">Initializing neural field simulation...</div>
+                <div style="margin-top: 10px; font-size: 9px; color: #00ffff;">
+                    <div>Dominant: <span id="dominant-freq">Alpha</span></div>
+                    <div>Coherence: <span id="coherence">0.65</span></div>
+                    <div>Complexity: <span id="complexity">1.42</span></div>
+                </div>
+            </div>
+            
+            <div id="status">
+                <div>FPS: <span id="fps">60</span></div>
+                <div>Zoom: <span id="zoom-level">1.0x</span></div>
+                <div>Mode: <span id="current-mode">Field</span></div>
+                <div>Time: <span id="time-display">0.0s</span></div>
+            </div>
+            
+            <div id="zoom-controls">
+                <button class="zoom-btn" onclick="zoomIn()">+</button>
+                <button class="zoom-btn" onclick="zoomOut()">−</button>
+                <button class="zoom-btn" onclick="zoomToQuantum()" title="Zoom to Quantum Scale">⚛️</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Global variables
+        let scene, camera, renderer, fieldMesh, channelGrids = [];
+        let animationId, isPlaying = false;
+        let currentTime = 0;
+        let zoomLevel = 1.0;
+        let currentMode = 'field';
+        let eegData = null;
+        let fieldUniforms = {};
+        
+        // Frequency band definitions
+        const freqBands = {
+            delta: { min: 0.5, max: 4, color: 0x8A2BE2 },
+            theta: { min: 4, max: 8, color: 0x4169E1 },
+            alpha: { min: 8, max: 13, color: 0x00FF88 },
+            beta: { min: 13, max: 30, color: 0xFF6B9D },
+            gamma: { min: 30, max: 100, color: 0xFFD700 }
+        };
+        
+        // Shader for neural field visualization
+        const fieldVertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+        
+        const fieldFragmentShader = `
+            uniform float time;
+            uniform float delta;
+            uniform float theta;
+            uniform float alpha;
+            uniform float beta;
+            uniform float gamma;
+            uniform float moireScale;
+            uniform float chaosLevel;
+            uniform float coupling;
+            uniform float zoomFactor;
+            varying vec2 vUv;
+            
+            // Noise function for chaos
+            float noise(vec2 p) {
+                return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+            }
+            
+            // Moiré interference pattern
+            float moire(vec2 p, float freq1, float freq2, float phase) {
+                float wave1 = sin(freq1 * length(p) + phase);
+                float wave2 = sin(freq2 * length(p * 1.1) + phase * 1.3);
+                return wave1 * wave2;
+            }
+            
+            // Fractal field function
+            float fractalField(vec2 p, float freq, float amp, float phase) {
+                float field = 0.0;
+                float scale = 1.0;
+                vec2 pos = p * freq * zoomFactor;
+                
+                for(int i = 0; i < 4; i++) {
+                    field += amp * sin(length(pos) * scale + phase + time * 0.5) / scale;
+                    pos *= 2.0;
+                    scale *= 2.0;
+                }
+                
+                // Add chaos
+                field += chaosLevel * (noise(pos * 0.1) - 0.5) * 2.0;
+                
+                return field;
+            }
+            
+            void main() {
+                vec2 p = (vUv - 0.5) * 2.0;
+                
+                // Generate individual frequency band fields
+                float deltaField = fractalField(p, 2.0, delta, 0.0);
+                float thetaField = fractalField(p, 6.0, theta, 1.57);
+                float alphaField = fractalField(p, 10.0, alpha, 3.14);
+                float betaField = fractalField(p, 20.0, beta, 4.71);
+                float gammaField = fractalField(p, 50.0, gamma, 6.28);
+                
+                // Combine fields with coupling
+                float combinedField = deltaField + thetaField + alphaField + betaField + gammaField;
+                
+                // Add moiré interference between bands
+                float interference = 0.0;
+                interference += moire(p, 8.0, 10.0, time) * alpha * theta * coupling;
+                interference += moire(p, 15.0, 25.0, time * 1.2) * beta * alpha * coupling;
+                interference += moire(p, 40.0, 60.0, time * 0.8) * gamma * beta * coupling;
+                
+                combinedField += interference * moireScale;
+                
+                // Color mapping based on field intensity and frequency dominance
+                vec3 color = vec3(0.0);
+                
+                // Base field color
+                float intensity = abs(combinedField);
+                color += vec3(0.0, 0.4, 0.8) * intensity;
+                
+                // Frequency-specific coloring
+                color += vec3(0.5, 0.2, 0.8) * deltaField * delta;      // Purple for delta
+                color += vec3(0.2, 0.4, 0.9) * thetaField * theta;      // Blue for theta
+                color += vec3(0.0, 1.0, 0.5) * alphaField * alpha;      // Green for alpha
+                color += vec3(1.0, 0.4, 0.6) * betaField * beta;        // Pink for beta
+                color += vec3(1.0, 0.8, 0.0) * gammaField * gamma;      // Gold for gamma
+                
+                // Add interference highlights
+                color += vec3(1.0, 1.0, 1.0) * abs(interference) * 0.5;
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+        
+        // Initialize Three.js scene
+        function initThreeJS() {
+            const canvas = document.getElementById('three-canvas');
+            const rect = canvas.getBoundingClientRect();
+            
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, rect.width / rect.height, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            
+            renderer.setSize(rect.width, rect.height);
+            renderer.setClearColor(0x000511);
+            
+            // Create neural field uniforms
+            fieldUniforms = {
+                time: { value: 0.0 },
+                delta: { value: 0.3 },
+                theta: { value: 0.5 },
+                alpha: { value: 0.8 },
+                beta: { value: 0.4 },
+                gamma: { value: 0.2 },
+                moireScale: { value: 1.0 },
+                chaosLevel: { value: 0.3 },
+                coupling: { value: 0.6 },
+                zoomFactor: { value: 1.0 }
+            };
+            
+            // Create field material and geometry
+            const fieldMaterial = new THREE.ShaderMaterial({
+                uniforms: fieldUniforms,
+                vertexShader: fieldVertexShader,
+                fragmentShader: fieldFragmentShader
+            });
+            
+            const fieldGeometry = new THREE.PlaneGeometry(10, 10, 256, 256);
+            fieldMesh = new THREE.Mesh(fieldGeometry, fieldMaterial);
+            scene.add(fieldMesh);
+            
+            camera.position.z = 5;
+            
+            // Add mouse controls
+            addMouseControls();
+            
+            // Start animation loop
+            animate();
+        }
+        
+        // Add mouse interaction
+        function addMouseControls() {
+            const canvas = document.getElementById('three-canvas');
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+            
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+            });
+            
+            canvas.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaMove = {
+                        x: e.offsetX - previousMousePosition.x,
+                        y: e.offsetY - previousMousePosition.y
+                    };
+                    
+                    fieldMesh.rotation.x += deltaMove.y * 0.01;
+                    fieldMesh.rotation.y += deltaMove.x * 0.01;
+                }
+                
+                previousMousePosition = { x: e.offsetX, y: e.offsetY };
+            });
+            
+            canvas.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+            
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomDelta = e.deltaY > 0 ? 1.1 : 0.9;
+                zoomLevel *= zoomDelta;
+                camera.position.z = Math.max(0.1, Math.min(50, camera.position.z * zoomDelta));
+                fieldUniforms.zoomFactor.value = zoomLevel;
+                updateZoomDisplay();
+            });
+        }
+        
+        // Animation loop
+        function animate() {
+            animationId = requestAnimationFrame(animate);
+            
+            if (isPlaying) {
+                currentTime += 0.016 * parseFloat(document.getElementById('speed').value);
+                document.getElementById('time-display').textContent = currentTime.toFixed(1) + 's';
+            }
+            
+            fieldUniforms.time.value = currentTime;
+            
+            // Update FPS counter
+            updateFPS();
+            
+            // Analyze current neural state
+            analyzeNeuralState();
+            
+            renderer.render(scene, camera);
+        }
+        
+        let lastTime = performance.now();
+        let frameCount = 0;
+        
+        function updateFPS() {
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+                document.getElementById('fps').textContent = Math.round(frameCount * 1000 / (now - lastTime));
+                frameCount = 0;
+                lastTime = now;
+            }
+        }
+        
+        // Update field parameters from sliders
+        function updateField() {
+            const params = ['delta', 'theta', 'alpha', 'beta', 'gamma', 'moire', 'chaos', 'coupling'];
+            
+            params.forEach(param => {
+                const slider = document.getElementById(param);
+                const valueDisplay = document.getElementById(param + '-val');
+                
+                if (slider && valueDisplay) {
+                    const value = parseFloat(slider.value);
+                    valueDisplay.textContent = value.toFixed(2);
+                    
+                    if (fieldUniforms[param]) {
+                        fieldUniforms[param].value = value;
+                    } else if (param === 'moire') {
+                        fieldUniforms.moireScale.value = value;
+                    } else if (param === 'chaos') {
+                        fieldUniforms.chaosLevel.value = value;
+                    }
+                }
+            });
+        }
+        
+        // Analyze neural state based on current parameters
+        function analyzeNeuralState() {
+            const delta = fieldUniforms.delta.value;
+            const theta = fieldUniforms.theta.value;
+            const alpha = fieldUniforms.alpha.value;
+            const beta = fieldUniforms.beta.value;
+            const gamma = fieldUniforms.gamma.value;
+            
+            // Find dominant frequency
+            const freqs = { delta, theta, alpha, beta, gamma };
+            const dominant = Object.keys(freqs).reduce((a, b) => freqs[a] > freqs[b] ? a : b);
+            
+            // Calculate coherence and complexity
+            const totalPower = delta + theta + alpha + beta + gamma;
+            const coherence = 1.0 - (Math.max(...Object.values(freqs)) - Math.min(...Object.values(freqs)));
+            const complexity = 1.0 + Math.log(totalPower + 1) * fieldUniforms.chaosLevel.value;
+            
+            // Update displays
+            document.getElementById('dominant-freq').textContent = dominant.charAt(0).toUpperCase() + dominant.slice(1);
+            document.getElementById('coherence').textContent = coherence.toFixed(2);
+            document.getElementById('complexity').textContent = complexity.toFixed(2);
+            
+            // Generate state description
+            let description = generateStateDescription(dominant, coherence, complexity, alpha, theta, beta);
+            document.getElementById('state-description').textContent = description;
+        }
+        
+        function generateStateDescription(dominant, coherence, complexity, alpha, theta, beta) {
+            const descriptions = {
+                alpha: [
+                    "Relaxed awareness detected. Conscious idling state.",
+                    "Meditative focus emerging. Alpha synchronization active.",
+                    "Calm alertness observed. Optimal learning conditions."
+                ],
+                theta: [
+                    "Deep creativity mode. Theta waves flowing.",
+                    "REM-like patterns. Memory consolidation active.",
+                    "Intuitive processing. Subconscious integration."
+                ],
+                beta: [
+                    "Active concentration. Beta dominance indicates focus.",
+                    "Problem-solving mode. Analytical processing engaged.",
+                    "Alert cognition. High-level thinking patterns."
+                ],
+                gamma: [
+                    "Consciousness binding detected. Gamma synchrony.",
+                    "Unified perception active. Cross-modal integration.",
+                    "Peak awareness state. Gamma coherence optimal."
+                ],
+                delta: [
+                    "Deep restoration mode. Delta waves present.",
+                    "Unconscious processing. System maintenance active.",
+                    "Sleep-like patterns. Recovery cycles engaged."
+                ]
+            };
+            
+            const dominantDescs = descriptions[dominant] || ["Unknown neural state."];
+            let desc = dominantDescs[Math.floor(Math.random() * dominantDescs.length)];
+            
+            // Add complexity modifiers
+            if (complexity > 1.8) {
+                desc += " High complexity - chaotic dynamics.";
+            } else if (complexity < 1.2) {
+                desc += " Low complexity - ordered state.";
+            }
+            
+            // Add coherence modifiers
+            if (coherence > 0.8) {
+                desc += " Strong coherence - synchronized activity.";
+            } else if (coherence < 0.4) {
+                desc += " Low coherence - fragmented processing.";
+            }
+            
+            return desc;
+        }
+        
+        // Control functions
+        function toggleMode(mode) {
+            currentMode = mode;
+            document.getElementById('current-mode').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+            
+            // Update button states
+            ['field', 'channels', 'interference'].forEach(m => {
+                const btn = document.getElementById('mode-' + m);
+                btn.style.background = m === mode ? 
+                    'linear-gradient(45deg, #00ff88, #00aa55)' : 
+                    'linear-gradient(45deg, #ff6b9d, #c44569)';
+            });
+            
+            // TODO: Implement different visualization modes
+        }
+        
+        function togglePlayback() {
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('play-btn');
+            btn.textContent = isPlaying ? '⏸️ Pause' : '▶️ Play';
+        }
+        
+        function stepTime() {
+            currentTime += 0.1;
+            document.getElementById('time-display').textContent = currentTime.toFixed(1) + 's';
+        }
+        
+        function resetView() {
+            camera.position.set(0, 0, 5);
+            fieldMesh.rotation.set(0, 0, 0);
+            zoomLevel = 1.0;
+            fieldUniforms.zoomFactor.value = 1.0;
+            updateZoomDisplay();
+        }
+        
+        function zoomIn() {
+            zoomLevel *= 1.5;
+            camera.position.z = Math.max(0.1, camera.position.z * 0.67);
+            fieldUniforms.zoomFactor.value = zoomLevel;
+            updateZoomDisplay();
+        }
+        
+        function zoomOut() {
+            zoomLevel *= 0.67;
+            camera.position.z = Math.min(50, camera.position.z * 1.5);
+            fieldUniforms.zoomFactor.value = zoomLevel;
+            updateZoomDisplay();
+        }
+        
+        function zoomToQuantum() {
+            // Zoom to "quantum scale" - maximum floating point precision
+            zoomLevel = 1000000;
+            camera.position.z = 0.001;
+            fieldUniforms.zoomFactor.value = zoomLevel;
+            updateZoomDisplay();
+            
+            // Add quantum noise effect
+            fieldUniforms.chaosLevel.value = Math.min(1.0, fieldUniforms.chaosLevel.value + 0.3);
+            document.getElementById('chaos').value = fieldUniforms.chaosLevel.value;
+            updateField();
+        }
+        
+        function updateZoomDisplay() {
+            const zoomText = zoomLevel >= 1000 ? 
+                (zoomLevel / 1000).toFixed(1) + 'k' : zoomLevel.toFixed(1);
+            document.getElementById('zoom-level').textContent = zoomText + 'x';
+        }
+        
+        // EEG file handling
+        function generateSynthetic() {
+            document.getElementById('eeg-upload').classList.add('loading');
+            
+            // Simulate synthetic EEG generation
+            setTimeout(() => {
+                eegData = generateSyntheticEEG();
+                document.getElementById('eeg-upload').innerHTML = 
+                    '<div>🧠 Synthetic Brain Active</div><div style="font-size: 9px; margin-top: 5px; color: #00ff88;">64 channels, 10 minutes</div>';
+                document.getElementById('eeg-upload').classList.remove('loading');
+                applyEEGData();
+            }, 1500);
+        }
+        
+        function loadDemo() {
+            document.getElementById('eeg-upload').classList.add('loading');
+            
+            // Simulate demo data loading
+            setTimeout(() => {
+                eegData = generateDemoEEG();
+                document.getElementById('eeg-upload').innerHTML = 
+                    '<div>🎯 Demo Data Loaded</div><div style="font-size: 9px; margin-top: 5px; color: #00ff88;">Alpha meditation session</div>';
+                document.getElementById('eeg-upload').classList.remove('loading');
+                applyEEGData();
+            }, 1000);
+        }
+        
+        function generateSyntheticEEG() {
+            // Generate synthetic EEG data with realistic frequency characteristics
+            const channels = 64;
+            const duration = 600; // 10 minutes
+            const sampleRate = 250;
+            const samples = duration * sampleRate;
+            
+            const data = {
+                channels: channels,
+                sampleRate: sampleRate,
+                duration: duration,
+                channelData: [],
+                freqPowers: {
+                    delta: [],
+                    theta: [],
+                    alpha: [],
+                    beta: [],
+                    gamma: []
+                }
+            };
+            
+            for (let ch = 0; ch < channels; ch++) {
+                const channelSignal = new Float32Array(samples);
+                
+                // Generate multi-frequency synthetic EEG
+                for (let s = 0; s < samples; s++) {
+                    const t = s / sampleRate;
+                    let signal = 0;
+                    
+                    // Add frequency components with realistic amplitudes
+                    signal += Math.sin(2 * Math.PI * 1.5 * t) * 20; // Delta
+                    signal += Math.sin(2 * Math.PI * 6 * t) * 15;   // Theta
+                    signal += Math.sin(2 * Math.PI * 10 * t) * 30;  // Alpha (dominant)
+                    signal += Math.sin(2 * Math.PI * 20 * t) * 10;  // Beta
+                    signal += Math.sin(2 * Math.PI * 40 * t) * 5;   // Gamma
+                    
+                    // Add noise and artifacts
+                    signal += (Math.random() - 0.5) * 5;
+                    
+                    // Add spatial variation between channels
+                    const spatialMod = Math.sin(ch * 0.1) * 0.5 + 1;
+                    channelSignal[s] = signal * spatialMod;
+                }
+                
+                data.channelData.push(channelSignal);
+                
+                // Calculate frequency powers for this channel
+                data.freqPowers.delta.push(0.2 + Math.random() * 0.3);
+                data.freqPowers.theta.push(0.3 + Math.random() * 0.4);
+                data.freqPowers.alpha.push(0.6 + Math.random() * 0.3);
+                data.freqPowers.beta.push(0.2 + Math.random() * 0.3);
+                data.freqPowers.gamma.push(0.1 + Math.random() * 0.2);
+            }
+            
+            return data;
+        }
+        
+        function generateDemoEEG() {
+            // Generate demo data simulating alpha meditation state
+            const data = generateSyntheticEEG();
+            
+            // Modify for meditation state (high alpha, low beta)
+            data.freqPowers.alpha = data.freqPowers.alpha.map(a => Math.min(1.0, a + 0.3));
+            data.freqPowers.beta = data.freqPowers.beta.map(b => b * 0.5);
+            data.freqPowers.theta = data.freqPowers.theta.map(t => Math.min(1.0, t + 0.2));
+            
+            return data;
+        }
+        
+        function applyEEGData() {
+            if (!eegData) return;
+            
+            // Calculate average frequency powers across all channels
+            const avgPowers = {};
+            Object.keys(eegData.freqPowers).forEach(band => {
+                const powers = eegData.freqPowers[band];
+                avgPowers[band] = powers.reduce((sum, p) => sum + p, 0) / powers.length;
+            });
+            
+            // Update sliders based on EEG data
+            Object.keys(avgPowers).forEach(band => {
+                const slider = document.getElementById(band);
+                const value = Math.min(1.0, avgPowers[band]);
+                if (slider) {
+                    slider.value = value;
+                    document.getElementById(band + '-val').textContent = value.toFixed(2);
+                    fieldUniforms[band].value = value;
+                }
+            });
+            
+            // Add some dynamic coupling based on EEG coherence
+            const coherenceLevel = calculateEEGCoherence(eegData);
+            document.getElementById('coupling').value = coherenceLevel;
+            document.getElementById('coupling-val').textContent = coherenceLevel.toFixed(2);
+            fieldUniforms.coupling.value = coherenceLevel;
+        }
+        
+        function calculateEEGCoherence(data) {
+            // Simplified coherence calculation
+            const powers = data.freqPowers;
+            let coherence = 0;
+            
+            // Calculate cross-band coherence
+            const bands = Object.keys(powers);
+            for (let i = 0; i < bands.length - 1; i++) {
+                for (let j = i + 1; j < bands.length; j++) {
+                    const corr = calculateCorrelation(powers[bands[i]], powers[bands[j]]);
+                    coherence += Math.abs(corr);
+                }
+            }
+            
+            return Math.min(1.0, coherence / 10); // Normalize
+        }
+        
+        function calculateCorrelation(arr1, arr2) {
+            const n = Math.min(arr1.length, arr2.length);
+            let sum1 = 0, sum2 = 0, sum1Sq = 0, sum2Sq = 0, pSum = 0;
+            
+            for (let i = 0; i < n; i++) {
+                sum1 += arr1[i];
+                sum2 += arr2[i];
+                sum1Sq += arr1[i] * arr1[i];
+                sum2Sq += arr2[i] * arr2[i];
+                pSum += arr1[i] * arr2[i];
+            }
+            
+            const num = pSum - (sum1 * sum2 / n);
+            const den = Math.sqrt((sum1Sq - sum1 * sum1 / n) * (sum2Sq - sum2 * sum2 / n));
+            
+            return den === 0 ? 0 : num / den;
+        }
+        
+        // File input handler
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('eeg-upload').classList.add('loading');
+            document.getElementById('eeg-upload').innerHTML = 
+                '<div>📊 Processing EEG File...</div><div style="font-size: 9px; margin-top: 5px; color: #ffaa00;">Parsing ' + file.name + '</div>';
+            
+            // Simulate file processing (in real implementation, would parse EDF/CSV)
+            setTimeout(() => {
+                // For demo, generate synthetic data based on filename
+                if (file.name.toLowerCase().includes('meditation') || file.name.toLowerCase().includes('alpha')) {
+                    eegData = generateDemoEEG();
+                } else {
+                    eegData = generateSyntheticEEG();
+                }
+                
+                document.getElementById('eeg-upload').innerHTML = 
+                    '<div>✅ ' + file.name + '</div><div style="font-size: 9px; margin-top: 5px; color: #00ff88;">Loaded successfully</div>';
+                document.getElementById('eeg-upload').classList.remove('loading');
+                applyEEGData();
+            }, 2000);
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case ' ':
+                    e.preventDefault();
+                    togglePlayback();
+                    break;
+                case 'r':
+                case 'R':
+                    resetView();
+                    break;
+                case '+':
+                case '=':
+                    zoomIn();
+                    break;
+                case '-':
+                case '_':
+                    zoomOut();
+                    break;
+                case 'q':
+                case 'Q':
+                    zoomToQuantum();
+                    break;
+                case '1':
+                    toggleMode('field');
+                    break;
+                case '2':
+                    toggleMode('channels');
+                    break;
+                case '3':
+                    toggleMode('interference');
+                    break;
+            }
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const canvas = document.getElementById('three-canvas');
+            const rect = canvas.getBoundingClientRect();
+            
+            camera.aspect = rect.width / rect.height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(rect.width, rect.height);
+        });
+        
+        // Advanced neural state descriptions
+        const advancedStateAnalysis = {
+            quantumCoherence: () => {
+                if (zoomLevel > 100000) {
+                    return "Quantum-scale observation active. Microtubule resonance detected.";
+                }
+                return "";
+            },
+            
+            ephapticCoupling: () => {
+                const coupling = fieldUniforms.coupling.value;
+                if (coupling > 0.8) {
+                    return "Strong ephaptic fields detected. Non-synaptic coupling dominant.";
+                } else if (coupling > 0.6) {
+                    return "Moderate field coupling. EM field influence present.";
+                }
+                return "";
+            },
+            
+            consciousnessMarkers: () => {
+                const gamma = fieldUniforms.gamma.value;
+                const alpha = fieldUniforms.alpha.value;
+                const coherence = parseFloat(document.getElementById('coherence').textContent);
+                
+                if (gamma > 0.7 && coherence > 0.8) {
+                    return "Consciousness binding detected. Unified perceptual field active.";
+                } else if (alpha > 0.8 && coherence > 0.6) {
+                    return "Relaxed awareness state. Default mode network engaged.";
+                }
+                return "";
+            }
+        };
+        
+        // Enhanced state analysis
+        function enhancedStateAnalysis() {
+            let analysis = [];
+            
+            Object.values(advancedStateAnalysis).forEach(analyzer => {
+                const result = analyzer();
+                if (result) analysis.push(result);
+            });
+            
+            if (analysis.length > 0) {
+                const currentDesc = document.getElementById('state-description').textContent;
+                document.getElementById('state-description').textContent = 
+                    currentDesc + " " + analysis.join(" ");
+            }
+        }
+        
+        // Call enhanced analysis periodically
+        setInterval(enhancedStateAnalysis, 3000);
+        
+        // Initialize the application
+        window.addEventListener('DOMContentLoaded', function() {
+            initThreeJS();
+            updateField();
+            
+            // Auto-generate synthetic data on startup
+            setTimeout(() => {
+                generateSynthetic();
+            }, 1000);
+            
+            // Show help message
+            setTimeout(() => {
+                const helpMsg = document.createElement('div');
+                helpMsg.style.cssText = `
+                    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.9); border: 2px solid #00ff88;
+                    padding: 20px; border-radius: 10px; color: #00ff88;
+                    font-family: 'Orbitron', monospace; z-index: 1000;
+                    text-align: center; max-width: 400px;
+                `;
+                helpMsg.innerHTML = `
+                    <div style="color: #ff6b9d; font-weight: bold; margin-bottom: 10px;">🧠 Neural Moiré Explorer</div>
+                    <div style="font-size: 12px; line-height: 1.4;">
+                        • Drag to rotate the neural field<br>
+                        • Mouse wheel to zoom in/out<br>
+                        • Spacebar to play/pause<br>
+                        • Press Q for quantum zoom<br>
+                        • Load EEG files or use synthetic data<br>
+                        • Explore consciousness through interference!
+                    </div>
+                    <button onclick="this.parentNode.remove()" style="
+                        margin-top: 15px; background: #ff6b9d; border: none;
+                        color: white; padding: 8px 16px; border-radius: 4px;
+                        cursor: pointer; font-family: 'Orbitron', monospace;
+                    ">Start Exploring</button>
+                `;
+                document.body.appendChild(helpMsg);
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
